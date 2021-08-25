@@ -1,0 +1,361 @@
+<template>
+  <div class="exportDataContent">
+    <div class="selectTipsBox">
+      <div class="selectTipsTitle">
+        <span class="selectTitle">数据筛选</span>
+      </div>
+      <div class="selectTips">
+        <div class="export_top">
+          <!-- 数据库查询 -->
+          <div>
+            <span><span style="color: red">*</span>&nbsp;数据库：</span>
+            <el-select v-model="dataBaseValue" clearable placeholder="请选择数据库(必选)">
+              <el-option
+                v-for="item in dataBaseOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.label">
+              </el-option>
+            </el-select>
+          </div>
+          <!-- 表名查询 -->
+          <div>
+            <span><span style="color: red">*</span>&nbsp;数据表：</span>
+            <el-select v-model="tableValue" @focus="getTableInVue()" :loading="tableLoading" clearable placeholder="请选择表名(必选)">
+              <el-option
+                v-for="item in tableOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.label">
+              </el-option>
+            </el-select>
+          </div>
+          <!-- 搜索字段 -->
+          <div>
+            <span>筛选字段：</span>
+            <el-select v-model="columnTypeValue" @focus="getColumnTypeInVue()" :loading="columnTypeLoading" clearable placeholder="请选择字段(非必选)">
+              <el-option
+                v-for="item in columnTypeOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.label">
+              </el-option>
+            </el-select>
+          </div>
+        </div>
+
+        <div class="export_timeClick">
+          <span>筛选时间：</span>
+            <div class="block">
+              <el-date-picker
+                v-model="fromToTime"
+                type="datetimerange"
+                value-format="yyyy-MM-dd HH:mm:ss"
+                range-separator="--"
+                start-placeholder="from"
+                end-placeholder="to">
+              </el-date-picker>
+            </div>
+          <!-- <span class="export_tips">*注：时间范围选取后，字段名称为必选项</span> -->
+        </div>
+
+        <div class="export_btnBox">
+          <el-button @click="selectDataBase()" type="primary"><i class="el-icon-search" style="margin-right: 8px"></i>查询</el-button>
+          <el-button @click="exportDataBase()" style="margin-left: 100px" type="primary"><i class="el-icon-download" style="margin-right: 8px"></i>导出</el-button>
+          <el-button @click="reset()" style="margin-left: 100px" type="primary"><i class="el-icon-refresh" style="margin-right: 8px"></i>重置</el-button>
+        </div>
+
+      </div>
+    </div>
+
+    <div v-show="showSelectTable" class="selectDataBox">
+      <div class="selectTipsTitle">
+        <span class="selectTitle">数据列表</span>
+      </div>
+      <div class="selectData">
+        <el-table
+          :data="selectTableData"
+          max-height="600"
+          :stripe="true"
+          border
+          style="width: fit-content">
+          <el-table-column
+          v-for="(item, index) in selectTableDataTitle"
+            :key="index"
+            :prop="item"
+            :label="item"
+            width="180">
+          </el-table-column>
+        </el-table>
+      </div>
+      <div class="pageBox">
+        <el-pagination
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+          :current-page="currentPage"
+          :page-size="pageSize"
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="totalCount">
+        </el-pagination>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import {getDataBase, getTable, getColumnType, exportDataBaseApi, selectDataBaseApi} from '@/api/table'
+import { Message } from 'element-ui'
+export default {
+  data() {
+    return {
+      // 数据库字段
+      dataBaseOptions: [],
+      dataBaseValue: '',
+      //表名字段
+      tableOptions: [],
+      tableValue: '',
+      columnTypeValue: '',
+      tableLoading: false,
+      columnTypeLoading: false,
+      columnTypeOptions: [],
+      // 日期时间选择器
+      fromToTime: '',
+      // 查询结果
+      selectTableData: [],
+      selectTableDataTitle: [],
+      showSelectTable: false,
+      totalPage: 1,
+      pageSize: 10,
+      totalCount: 10,
+      currentPage: 1
+    }
+  },
+  methods: {
+    getTableInVue() {
+      if (!this.dataBaseValue) {
+        Message({
+          message: '请先选择数据库名称',
+          type: 'error',
+          duration: 3000
+        })
+        return
+      }
+      this.tableLoading = true
+      getTable({
+        dbName: this.dataBaseValue
+      }).then(res => {
+        this.tableOptions = []
+        this.tableLoading = false
+        res.data.forEach((item, index) => {
+          this.tableOptions.push({
+            value: index,
+            label: item
+          })
+        });
+      })
+    },
+    getColumnTypeInVue() {
+      if (!this.dataBaseValue || !this.tableValue) {
+        Message({
+          message: '请选择必选字段',
+          type: 'error',
+          duration: 3000
+        })
+        return
+      }
+      this.columnTypeLoading = true
+      getColumnType({
+        dbName: this.dataBaseValue,
+        tableName: this.tableValue
+      }).then(res => {
+        this.columnTypeOptions = []
+        this.columnTypeLoading = false
+        res.data.forEach((item, index) => {
+          this.columnTypeOptions.push({
+            value: index,
+            label: item
+          })
+        });
+      })
+    },
+    exportDataBase() {
+      if (!this.dataBaseValue || !this.tableValue) {
+        Message({
+          message: '请选择必选字段',
+          type: 'error',
+          duration: 3000
+        })
+        return
+      }
+      exportDataBaseApi({
+        dbName: this.dataBaseValue,
+        columnName: this.columnTypeValue,
+        fromDate: this.fromToTime ? this.fromToTime[0] : '',
+        toDate: this.fromToTime ? this.fromToTime[1] : '',
+        tableName: this.tableValue
+      }).then(res => {
+        console.log(res)
+        let a = document.createElement('a');
+        //ArrayBuffer 转为 Blob
+        let blob = new Blob([res], {type: "application/vnd.ms-excel"}); 
+        let objectUrl = URL.createObjectURL(blob);
+        a.setAttribute("href",objectUrl);
+        a.setAttribute("download", this.dataBaseValue + '+' + this.tableValue + '.xls');
+        a.click();
+      }).catch(err => {
+        console.log(err)
+      })
+    },
+    selectDataBase() {
+      console.log(this.fromToTime)
+      if (!this.dataBaseValue || !this.tableValue) {
+        Message({
+          message: '请选择必选字段',
+          type: 'error',
+          duration: 3000
+        })
+        return
+      }
+      this.showLoading();
+      this.showSelectTable = true
+      this.selectDataByPage(1)
+    },
+    reset() {
+      this.dataBaseValue = '';
+      this.tableOptions = [];
+      this.tableValue = '';
+      this.columnTypeValue = '';
+      this.columnTypeOptions = [];
+      this.fromToTime = '';
+      this.showSelectTable = false;
+    },
+    selectDataByPage(page, pageSize) {
+      selectDataBaseApi({
+        dbName: this.dataBaseValue,
+        columnName: this.columnTypeValue,
+        fromDate: this.fromToTime ? this.fromToTime[0] : '',
+        toDate: this.fromToTime ? this.fromToTime[1] : '',
+        tableName: this.tableValue,
+        size: pageSize ? pageSize : 10,
+        page
+      }).then(res => {
+        console.log(res)
+        this.totalPage = res.data.totalPage
+        this.totalCount = res.data.totalCount
+        this.selectTableData = []
+        this.selectTableDataTitle = res.data.title
+        // 处理数据
+        res.data.content.forEach(item => {
+          let obj = {}
+          res.data.title.forEach((titleItem, index) => {
+            obj[titleItem] = item[index]
+          })
+          this.selectTableData.push(obj)
+        })
+        console.log(this.selectTableData)
+        this.closeLoading()
+      }).catch(err => {
+        console.log(err)
+        this.closeLoading()
+      })
+    },
+    handleSizeChange(val) {
+      this.currentPage = 1
+      this.pageSize = val
+      this.selectDataByPage(1, val)
+    },
+    handleCurrentChange(val) {
+      this.selectDataByPage(val, this.pageSize)
+      this.currentPage = val
+    }
+  },
+  watch: {
+    // 监听数据库名称，发生变化清空表名，字段名
+    dataBaseValue: function() {
+      this.tableOptions = [];
+      this.tableValue = '';
+      this.columnTypeValue = '';
+      this.columnTypeOptions = [];
+      this.fromToTime = ''
+    },
+    // 监听表名，发生变化清空字段名
+    tableValue: function() {
+      this.columnTypeValue = '';
+      this.columnTypeOptions = [];
+      this.fromToTime = ''
+    }
+  },
+  mounted() {
+    getDataBase().then(res => {
+      res.data.forEach((item, index) => {
+        this.dataBaseOptions.push({
+          value: index,
+          label: item
+        })
+      });
+    })
+  }
+}
+</script>
+
+<style lang="scss" scoped>
+.exportDataContent {
+  min-height: calc(100vh - 50px);
+  background-color: #eeeeee;
+  padding: 20px 20px;
+}
+.selectTipsBox {
+  padding-bottom: 20px;
+}
+.selectTipsBox, .selectDataBox {
+  margin: 0 auto;
+  // border: 1px solid #eeeeee;
+  background-color: #ffffff;
+  padding-bottom: 20px;
+  .selectTipsTitle {
+    height: 50px;
+    line-height: 50px;
+    padding-left: 15px;
+    border-bottom: 1px solid #eeeeee;
+  }
+}
+.selectDataBox {
+  margin-top: 40px;
+  .selectTipsTitle {
+    border: none;
+  }
+}
+.selectTitle {
+  color: #666;
+  font-weight: bold;
+}
+.export_top {
+  padding: 20px 80px;
+  display: flex;
+  justify-content: space-between;
+}
+.selectData {
+  // width: 96%;
+  // margin: 0 auto;
+  padding: 0 15px;
+}
+.export_timeClick {
+  display: flex;
+  align-items: center;
+  padding-left: 80px;
+}
+.export_tips {
+  font-size: 12px;
+  margin-left: 20px;
+}
+.export_btnBox {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+}
+.pageBox {
+  display: flex;
+  margin-top: 20px;
+  justify-content: center;
+}
+</style>
